@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 
 class Admin extends Controller
 {
@@ -290,10 +291,10 @@ class Admin extends Controller
         $item->invoice_id = $request->invoice_id;
         $item->quantity = $request->quantity;
        
-        if($request->is_gst==1){
-            $item->price_of_one = $request->price;
+       if($request->is_gst==1){
+            $item->price_of_one = round((($request->price)/1.18),2);
         }else{
-            $item->price_of_one = $request->price/1.18;
+            $item->price_of_one = $request->price;
         }
         $address = Addres::where('invoice_id',$request->invoice_id)->first();
         // Calculate GST based on whether it's inclusive or exclusive
@@ -302,38 +303,40 @@ class Admin extends Controller
             $item->is_gst = 1;
             // Check if the address place is Delhi
             if ($address->state == 'delhi' || $address->state == 'Delhi') {
-                $item->dgst = (0.09 * $item->price_of_one)*$request->quantity; // 9% GST for Delhi
-                $item->cgst = (0.09 * $item->price_of_one)*$request->quantity; // 9% GST for Delhi
+                $item->dgst = round((0.09 * $item->price_of_one)*$request->quantity,2); // 9% GST for Delhi
+                $item->cgst = round((0.09 * $item->price_of_one)*$request->quantity,2); // 9% GST for Delhi
                 $item->igst = 0; // No IGST for Delhi
             } else {
                 $item->dgst = 0; // No DGST for other states
                 $item->cgst = 0; // No CGST for other states
-                $item->igst = (0.18 * $item->price_of_one)*$request->quantity; // 18% IGST for other states
+                $item->igst = round((0.18 * $item->price_of_one)*$request->quantity,2); // 18% IGST for other states
             }
         } else {
             // Exclusive GST
             $item->is_gst = 0;
             if ($address->state == 'delhi' || $address->state == 'Delhi') {
-                $item->dgst = (0.09 * $item->price_of_one)*$request->quantity; // 9% GST for Delhi
-                $item->cgst = (0.09 * $item->price_of_one)*$request->quantity; // 9% GST for Delhi
+                $item->dgst = round((0.09 * $item->price_of_one)*$request->quantity,2); // 9% GST for Delhi
+                $item->cgst = round((0.09 * $item->price_of_one)*$request->quantity,2); // 9% GST for Delhi
                 $item->igst = 0; // No IGST for Delhi
             } else {
                 $item->dgst = 0; // No DGST for other states
                 $item->cgst = 0; // No CGST for other states
-                $item->igst = (0.18 * $item->price_of_one)*$request->quantity; // 18% IGST for other states
+                $item->igst = round((0.18 * $item->price_of_one)*$request->quantity,2); // 18% IGST for other states
             }
-            $item->price_of_all = $item->price_of_one*$request->quantity;
+            // $item->price_of_all = $item->price_of_one*$request->quantity;
         }
-        $item->price_of_all = $item->price_of_one*$request->quantity + $item->dgst + $item->cgst + $item->igst;
+        $item->price_of_all = round(($item->price_of_one*$request->quantity + $item->dgst + $item->cgst + $item->igst),2);
         $item->save();
-        $update_main = Invoice::find($request->invoice_id);
+        // echo $request->invoice_id;
+        $update_main = Invoice::where('id',$request->invoice_id)->first();
+        // print_r($update_main);
         $update_main->total_dgst = $update_main->total_dgst+$item->dgst;
         $update_main->total_cgst = $update_main->total_cgst+$item->cgst;
         $update_main->total_igst = $update_main->total_igst+$item->igst;
         $update_main->total_amount = $update_main->total_amount + $item->price_of_all;
         $update_main->save();
         
-        return response()->json(['status' => true, 'message' => 'Product Added successfully.', 'data' => $item], 201);
+        return response()->json(['status' => true, 'message' => 'Product Added successfully.', 'data' => $item,  ], 201);
     } catch (\Exception $e) {
         return response()->json(['status' => false, 'message' => 'Failed to create invoice.', 'error' => $e->getMessage()], 500);
     }
@@ -505,7 +508,16 @@ class Admin extends Controller
             $location->state = $request->state;
             $location->pincode = $request->pincode;
             $location->save();
+             
         }
+        $update_main = Invoice::find($request->invoice_id);
+             if($request->type==0){
+                 $update_main->billing_address_id = $location->id;
+             }else{
+                  $update_main->shipping_address_id = $location->id;
+             }
+             $update_main->save();
+        
         
         return response([
             'status' => true,
@@ -519,6 +531,12 @@ class Admin extends Controller
             'error' => $e->getMessage()
         ], 500);
     }
+}
+private function getFileExtension($base64Data) {
+    $fileInfo = explode(';base64,', $base64Data);
+    $mime = str_replace('data:', '', $fileInfo[0]);
+    $extension = explode('/', $mime)[1];
+    return $extension;
 }
 public function addExpense(Request $request){
     $rules = [
@@ -538,19 +556,28 @@ public function addExpense(Request $request){
             $expense->name = $request->name;
             $expense->amount = $request->amount;
             $expense->type = $request->type;
-            if ($request->hasFile('file')) {
-                $file = $request->file('file')->store('public/expense');
-                $expense->file = $file;
+    
+            if ($request->has('file')) {
+                $fileData = $request->file; // base64 encoded file data
+                $fileName = 'expense_' . time() . '.' . $this->getFileExtension($fileData).'.'.$request->extension;
+                $filePath = 'public/expense/' . $fileName;
+                \Storage::put($filePath, base64_decode($fileData));
+                $expense->file = $filePath;
             }
+    
             $expense->save();
-        }else{
+        } else {
             $expense = new Expenses();
             $expense->name = $request->name;
             $expense->amount = $request->amount;
             $expense->type = $request->type;
-            if ($request->hasFile('file')) {
-                $file = $request->file('file')->store('public/expense');
-                $expense->file = $file;
+    
+            if ($request->has('file')) {
+                $fileData = $request->file; // base64 encoded file data
+                $fileName = 'expense_' . time() . '.' . $this->getFileExtension($fileData).'.'.$request->extension;
+                $filePath = 'public/expense/' . $fileName;
+                \Storage::put($filePath, base64_decode($fileData));
+                $expense->file = $filePath;
             }
             $expense->save();
         }
@@ -597,15 +624,32 @@ public function getAllExpenses(Request $request){
         $type = $request->type;
         $query->where('type', $type);
     }
+
+        // Filter by name
+        if($request->has('name')){
+            $name = $request->name;
+            $query->where('name', 'like', '%' . $name . '%');
+        }
+
+            // Filter by amount range
+    if($request->has('amount_min') && $request->has('amount_max')){
+        $amountMin = $request->amount_min;
+        $amountMax = $request->amount_max;
+        $query->whereBetween('amount', [$amountMin, $amountMax]);
+    } 
+
     if($request->has('expense_id')){
         $query->where('id', $request->expense_id);
     }
+
+
 
     $expenses = $query->get();
 
     return response([
         'status' => true,
-        'data' => $expenses
+        'data' => $expenses,
+        'message' => "Data Feteched."
     ], 200);
 }
 
