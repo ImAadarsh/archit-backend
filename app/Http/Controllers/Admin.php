@@ -151,6 +151,7 @@ class Admin extends Controller
     public function getAllInvoices(Request $request){
     try {
         $query = Invoice::query();
+        $query->orderBy('created_at', 'desc');
 
         // If location_id and business_id are provided, filter by both
         if ($request->has('location_id') && $request->has('business_id')) {
@@ -214,7 +215,7 @@ class Admin extends Controller
     public function editInvoice(Request $request){
     // Validation rules for updating invoice
     $rules = [
-        'type' => 'required',
+        'id' => 'required',
         // Add validation rules for other fields if necessary
     ];
 
@@ -236,18 +237,43 @@ class Admin extends Controller
         }
 
         // Update the invoice fields
-        $invoice->name = $request->name;
-        $invoice->mobile_number = $request->mobile_number;
-        $invoice->customer_type = $request->customer_type;
-        $invoice->doc_type = $request->doc_type;
-        $invoice->doc_no = $request->doc_no;
-        $invoice->business_id = $request->business_id;
-        $invoice->location_id = $request->location_id;
-        $invoice->payment_mode = $request->payment_mode;
-        $invoice->billing_address_id = $request->billing_address_id;
-        $invoice->shipping_address_id = $request->shipping_address_id;
-        $invoice->is_completed = $request->is_completed;
-        $invoice->invoice_date = $request->invoice_date;
+        if(isset($request->name)){
+            $invoice->name = $request->name;
+        }
+        if(isset($request->mobile_number)){
+            $invoice->mobile_number = $request->mobile_number;
+        }
+        if(isset($request->customer_type)){
+            $invoice->customer_type = $request->customer_type;
+        }
+        if(isset($request->doc_type)){
+            $invoice->doc_type = $request->doc_type;
+        }
+        if(isset($request->doc_no)){
+            $invoice->doc_no = $request->doc_no;
+        }
+        if(isset($request->business_id)){
+            $invoice->business_id = $request->business_id;
+        }
+        if(isset($request->location_id)){
+            $invoice->location_id = $request->location_id;
+        }
+        if(isset($request->payment_mode)){
+            $invoice->payment_mode = $request->payment_mode;
+        }
+        if(isset($request->billing_address_id)){
+            $invoice->billing_address_id = $request->billing_address_id;
+        }
+        if(isset($request->shipping_address_id)){
+            $invoice->shipping_address_id = $request->shipping_address_id;
+        }
+        if(isset($request->is_completed)){
+            $invoice->is_completed = $request->is_completed;
+        }
+        if(isset($request->invoice_date)){
+            $invoice->invoice_date = $request->invoice_date;
+        }
+        
         // Update other fields as necessary
         $invoice->save();
         return response()->json(['status' => true, 'message' => 'Invoice updated successfully.', 'data' => $invoice], 200);
@@ -285,47 +311,64 @@ class Admin extends Controller
             $product->hsn_code = $request->hsn_code;
             $product->save();
         }
+        $invoice = Invoice::find($request->invoice_id);
 
         $item = new Item();
         $item->product_id = $product->id;
         $item->invoice_id = $request->invoice_id;
         $item->quantity = $request->quantity;
-       
-       if($request->is_gst==1){
+       if($invoice->type=="normal"){
+           if($request->is_gst==1){
             $item->price_of_one = round((($request->price)/1.18),2);
         }else{
             $item->price_of_one = $request->price;
         }
+       }else if($invoice->type=='performa'){
+             $item->price_of_one = $request->price;
+            
+        }
+       
         $address = Addres::where('invoice_id',$request->invoice_id)->first();
         // Calculate GST based on whether it's inclusive or exclusive
-        if ($request->is_gst == 1) {
+        if($invoice->type=="normal"){
+             if ($request->is_gst == 1) {
             // Inclusive GST
             $item->is_gst = 1;
             // Check if the address place is Delhi
             if ($address->state == 'delhi' || $address->state == 'Delhi') {
-                $item->dgst = round((0.09 * $item->price_of_one)*$request->quantity,2); // 9% GST for Delhi
-                $item->cgst = round((0.09 * $item->price_of_one)*$request->quantity,2); // 9% GST for Delhi
+                $item->dgst = round(((0.09 * $item->price_of_one)*$request->quantity),2); // 9% GST for Delhi
+                $item->cgst = round(((0.09 * $item->price_of_one)*$request->quantity),2); // 9% GST for Delhi
                 $item->igst = 0; // No IGST for Delhi
             } else {
                 $item->dgst = 0; // No DGST for other states
                 $item->cgst = 0; // No CGST for other states
-                $item->igst = round((0.18 * $item->price_of_one)*$request->quantity,2); // 18% IGST for other states
+                $item->igst = round(((0.18 * $item->price_of_one)*$request->quantity),2); // 18% IGST for other states
             }
         } else {
             // Exclusive GST
             $item->is_gst = 0;
             if ($address->state == 'delhi' || $address->state == 'Delhi') {
-                $item->dgst = round((0.09 * $item->price_of_one)*$request->quantity,2); // 9% GST for Delhi
-                $item->cgst = round((0.09 * $item->price_of_one)*$request->quantity,2); // 9% GST for Delhi
+                $item->dgst = round(((0.09 * $item->price_of_one)*$request->quantity),2); // 9% GST for Delhi
+                $item->cgst = round(((0.09 * $item->price_of_one)*$request->quantity),2); // 9% GST for Delhi
                 $item->igst = 0; // No IGST for Delhi
             } else {
                 $item->dgst = 0; // No DGST for other states
                 $item->cgst = 0; // No CGST for other states
-                $item->igst = round((0.18 * $item->price_of_one)*$request->quantity,2); // 18% IGST for other states
+                $item->igst = round(((0.18 * $item->price_of_one)*$request->quantity),2); // 18% IGST for other states
             }
             // $item->price_of_all = $item->price_of_one*$request->quantity;
         }
-        $item->price_of_all = round(($item->price_of_one*$request->quantity + $item->dgst + $item->cgst + $item->igst),2);
+            
+        }else if($invoice->type=='performa'){
+             $item->dgst = 0;
+                $item->cgst = 0;
+                $item->igst = 0;
+            
+        }
+        
+       
+        $temp = $item->price_of_one*$request->quantity + $item->dgst + $item->cgst + $item->igst;
+        $item->price_of_all = round(($temp),2);
         $item->save();
         // echo $request->invoice_id;
         $update_main = Invoice::where('id',$request->invoice_id)->first();
@@ -335,7 +378,12 @@ class Admin extends Controller
         $update_main->total_igst = $update_main->total_igst+$item->igst;
         $update_main->total_amount = $update_main->total_amount + $item->price_of_all;
         $update_main->save();
-        
+        $item->t_dgst = round(($update_main->total_dgst),2);
+         $item->t_cgst = round(($update_main->total_cgst),2);
+          $item->t_igst = round(($update_main->total_igst),2);
+           $item->total_amount = round(($update_main->total_amount),2);
+           $item->total_ex_gst_amount = round(($update_main->total_amount - $update_main->total_dgst - $update_main->total_cgst - $update_main->total_igst),2);
+         
         return response()->json(['status' => true, 'message' => 'Product Added successfully.', 'data' => $item,  ], 201);
     } catch (\Exception $e) {
         return response()->json(['status' => false, 'message' => 'Failed to create invoice.', 'error' => $e->getMessage()], 500);
@@ -413,7 +461,8 @@ class Admin extends Controller
         }
         $address = Addres::where('invoice_id', $request->invoice_id)->first();
         // Calculate GST based on whether it's inclusive or exclusive
-        if ($request->is_gst == 1) {
+        if($request->type=='normal'){
+                  if ($request->is_gst == 1) {
             // Inclusive GST
             // Check if the address place is Delhi
            
@@ -438,6 +487,14 @@ class Admin extends Controller
                 $item->igst = (0.18 * $item->price_of_one) * $request->quantity; // 18% IGST for other states
             }
         }
+            
+        }else if($request->type=='performa'){
+             $item->dgst = 0;
+                $item->cgst = 0;
+                $item->igst = 0;
+            
+        }
+  
 
         // Calculate total price of the item
         $item->price_of_all = $item->price_of_one * $request->quantity + $item->dgst + $item->cgst + $item->igst;
@@ -456,25 +513,45 @@ class Admin extends Controller
     }
 }
 
-    public function removeItem($item_id){
+public function removeItem($item_id){
     try {
         // Find the item to remove
         $item = Item::findOrFail($item_id);
+        
         if($item){
             $update_main = Invoice::find($item->invoice_id);
-            $update_main->total_dgst = $update_main->total_dgst-$item->dgst;
-            $update_main->total_cgst = $update_main->total_cgst-$item->cgst;
-            $update_main->total_igst = $update_main->total_igst-$item->igst;
-            $update_main->total_amount = $update_main->total_amount - $item->price_of_all;
-            $update_main->save();
+
+            if ($update_main) {
+                // Update the main invoice totals
+                $update_main->total_dgst -= $item->dgst;
+                $update_main->total_cgst -= $item->cgst;
+                $update_main->total_igst -= $item->igst;
+                $update_main->total_amount -= $item->price_of_all;
+
+                // Save the updated invoice
+                $update_main->save();
+
+                // Create response data with rounded values
+                $item1 = new \stdClass();
+                $item1->t_dgst = round($update_main->total_dgst, 2);
+                $item1->t_cgst = round($update_main->total_cgst, 2);
+                $item1->t_igst = round($update_main->total_igst, 2);
+                $item1->total_amount = round($update_main->total_amount, 2);
+                $item1->total_ex_gst_amount = round($update_main->total_amount - $update_main->total_dgst - $update_main->total_cgst - $update_main->total_igst, 2);
+            } else {
+                return response()->json(['status' => false, 'message' => 'Invoice not found.'], 404);
+            }
         }
+
         // Delete the item
         $item->delete();
-        return response()->json(['status' => true, 'message' => 'Item removed successfully.'], 200);
+        
+        return response()->json(['status' => true, 'message' => 'Item removed successfully.', 'data' => $item1], 200);
     } catch (\Exception $e) {
         return response()->json(['status' => false, 'message' => 'Failed to remove item.', 'error' => $e->getMessage()], 500);
     }
 }
+
     public function addAddress(Request $request){
     $rules = [
         'state' => 'required',
@@ -556,7 +633,11 @@ public function addExpense(Request $request){
             $expense->name = $request->name;
             $expense->amount = $request->amount;
             $expense->type = $request->type;
-    
+            $expense->business_id = $request->business_id;
+            $expense->location_id = $request->location_id;
+            $expense->user_id = $request->user_id;
+            $expense->save();
+            $expense->find($expense->id);
             if ($request->has('file')) {
                 $fileData = $request->file; // base64 encoded file data
                 $fileName = 'expense_' . time() . '.' . $this->getFileExtension($fileData).'.'.$request->extension;
@@ -571,10 +652,11 @@ public function addExpense(Request $request){
             $expense->name = $request->name;
             $expense->amount = $request->amount;
             $expense->type = $request->type;
-    
+            $expense->save();
+            $expense->find($expense->id);
             if ($request->has('file')) {
                 $fileData = $request->file; // base64 encoded file data
-                $fileName = 'expense_' . time() . '.' . $this->getFileExtension($fileData).'.'.$request->extension;
+                $fileName = 'expense_'.$expense->id.'.'.$request->extension;
                 $filePath = 'public/expense/' . $fileName;
                 \Storage::put($filePath, base64_decode($fileData));
                 $expense->file = $filePath;
@@ -642,6 +724,8 @@ public function getAllExpenses(Request $request){
         $query->where('id', $request->expense_id);
     }
 
+        // Order by id in descending order
+        $query->orderBy('id', 'DESC');
 
 
     $expenses = $query->get();
@@ -716,6 +800,409 @@ public function deleteExpense(Request $request){
         return response()->json(['status' => false, 'message' => 'Failed to retrieve address.', 'error' => $e->getMessage()], 500);
     }
 }
+
+public function getSaleReport(Request $request){
+    $query = Invoice::query();
+
+    // Filter by day
+    if($request->has('day')){
+        $query->whereDate('invoice_date', $request->day);
+    }
+
+    // Filter by month
+    if($request->has('month')){
+        $query->whereMonth('invoice_date', $request->month);
+    }
+
+    // Filter by week
+    if($request->has('week_start')){
+        // Assuming the week is passed as an array with start and end dates
+        $query->whereBetween('invoice_date', [$request->week_start, $request->week_end]);
+    }
+
+    // Filter by year
+    if($request->has('year')){
+        $query->whereYear('invoice_date', $request->year);
+    }
+
+    // Filter by invoice type or performa
+    if($request->has('type')){
+        $Type = $request->type;
+        $query->where('type', $Type);
+    }
+
+    // Filter by name
+    if($request->has('name')){
+        $name = $request->name;
+        $query->where('name', 'like', '%' . $name . '%');
+    }
+
+    // Filter by amount range
+    if($request->has('amount_min') && $request->has('amount_max')){
+        $amountMin = $request->amount_min;
+        $amountMax = $request->amount_max;
+        $query->whereBetween('total_amount', [$amountMin, $amountMax]);
+    }
+
+    // Filter by invoice ID
+    if($request->has('invoice_id')){
+        $query->where('id', $request->invoice_id);
+    }
+
+    // Order by id in descending order
+    $query->orderBy('id', 'DESC');
+
+    // Get the filtered invoices
+    $query->where('is_completed', 1);
+    $invoices = $query->get(['id', 'name', 'total_amount', 'invoice_date', 'type']);
+
+    // Calculate total amount and total transactions
+    $totalAmount = round($invoices->sum('total_amount'),2);
+    $totalTransactions = $invoices->count();
+
+    return response([
+        'status' => true,
+        'total_amount' => $totalAmount,
+        'total_transactions' => $totalTransactions,
+        'data' => $invoices,
+        'message' => "Data fetched."
+    ], 200);
+}
+
+public function getExpenseReport(Request $request){
+    $query = Expenses::query();
+
+    // Filter by day
+    if($request->has('day')){
+        $query->whereDate('created_at', $request->day);
+    }
+
+    // Filter by month
+    if($request->has('month')){
+        $query->whereMonth('created_at', $request->month);
+    }
+
+    // Filter by week
+    if($request->has('week_start')){
+        // Assuming the week is passed as an array with start and end dates
+        $query->whereBetween('created_at', [$request->week_start, $request->week_end]);
+    }
+
+    // Filter by year
+    if($request->has('year')){
+        $query->whereYear('created_at', $request->year);
+    }
+
+    // Filter by expense type (0 or 1)
+    if($request->has('type')){
+        $type = $request->type;
+        $query->where('type', $type);
+    }
+
+        // Filter by name
+        if($request->has('name')){
+            $name = $request->name;
+            $query->where('name', 'like', '%' . $name . '%');
+        }
+
+            // Filter by amount range
+    if($request->has('amount_min') && $request->has('amount_max')){
+        $amountMin = $request->amount_min;
+        $amountMax = $request->amount_max;
+        $query->whereBetween('amount', [$amountMin, $amountMax]);
+    } 
+
+    if($request->has('expense_id')){
+        $query->where('id', $request->expense_id);
+    }
+
+        // Order by id in descending order
+        $query->orderBy('id', 'DESC');
+
+
+    $expenses = $query->get();
+        // Calculate total amount and total transactions
+        $totalAmount = round($expenses->sum('amount'),2);
+        $totalTransactions = $expenses->count();
+
+    return response([
+        'status' => true,
+        'total_expense' => $totalAmount,
+        'total_transactions' => $totalTransactions,
+        'url' => 'URL will be avaliable.',
+        'data' => $expenses,
+        'message' => "Data Feteched."
+    ], 200);
+}
+
+public function getPurchaseSaleInvoice(Request $request){
+    $query = Invoice::query();
+
+    // Filter by day
+    if($request->has('day')){
+        $query->whereDate('invoice_date', $request->day);
+    }
+
+    // Filter by month
+    if($request->has('month')){
+        $query->whereMonth('invoice_date', $request->month);
+    }
+
+    // Filter by week
+    if($request->has('week_start')){
+        // Assuming the week is passed as an array with start and end dates
+        $query->whereBetween('invoice_date', [$request->week_start, $request->week_end]);
+    }
+
+    // Filter by year
+    if($request->has('year')){
+        $query->whereYear('invoice_date', $request->year);
+    }
+
+    // Filter by payment mode
+    if($request->has('payment_mode')){
+        $paymentMode = $request->payment_mode;
+        $query->where('payment_mode', $paymentMode);
+    }
+
+    // Filter by invoice type (normal only)
+    $query->where('type', 'normal');
+
+    // Filter by name
+    if($request->has('name')){
+        $name = $request->name;
+        $query->where('name', 'like', '%' . $name . '%');
+    }
+
+    // Filter by amount range
+    if($request->has('amount_min') && $request->has('amount_max')){
+        $amountMin = $request->amount_min;
+        $amountMax = $request->amount_max;
+        $query->whereBetween('total_amount', [$amountMin, $amountMax]);
+    }
+
+    // Filter by invoice ID
+    if($request->has('invoice_id')){
+        $query->where('id', $request->invoice_id);
+    }
+
+    // Ensure only completed invoices are considered
+    $query->where('is_completed', 1);
+
+    // Order by id in descending order
+    $query->orderBy('id', 'DESC');
+
+    // Select only the specified columns
+    $invoices = $query->get(['id', 'name', 'total_amount', 'total_igst', 'total_cgst', 'total_dgst', 'invoice_date', 'type']);
+
+    // Calculate total GST, amount excluding GST, and aggregate totals
+    $totalGST = 0;
+    $totalExcludingGST = 0;
+    foreach ($invoices as $invoice) {
+        $invoice->total_gst = $invoice->total_igst + $invoice->total_cgst + $invoice->total_dgst;
+        $invoice->amount_excluding_gst = $invoice->total_amount - $invoice->total_gst;
+        $totalGST += $invoice->total_gst;
+        $totalExcludingGST += $invoice->amount_excluding_gst;
+    }
+
+    // Calculate total amount and total transactions
+    $totalAmount = round($invoices->sum('total_amount'), 2);
+    $totalTransactions = $invoices->count();
+
+    return response([
+        'status' => true,
+        'total_amount' => $totalAmount,
+        'total_transactions' => $totalTransactions,
+        'total_gst' => round($totalGST, 2),
+        'total_excluding_gst' => round($totalExcludingGST, 2),
+        'URL' => "URL, Red PDF Icon.",
+        'data' => $invoices,
+        'message' => "Data fetched."
+    ], 200);
+}
+public function getInvoiceListReport(Request $request){
+    $query = Invoice::query();
+
+    // Filter by day
+    if($request->has('day')){
+        $query->whereDate('invoice_date', $request->day);
+    }
+
+    // Filter by month
+    if($request->has('month')){
+        $query->whereMonth('invoice_date', $request->month);
+    }
+
+    // Filter by week
+    if($request->has('week_start')){
+        // Assuming the week is passed as an array with start and end dates
+        $query->whereBetween('invoice_date', [$request->week_start, $request->week_end]);
+    }
+
+    // Filter by year
+    if($request->has('year')){
+        $query->whereYear('invoice_date', $request->year);
+    }
+
+    // Filter by invoice type or performa
+    if($request->has('type')){
+        $Type = $request->type;
+        $query->where('type', $Type);
+    }
+
+    // Filter by name
+    if($request->has('name')){
+        $name = $request->name;
+        $query->where('name', 'like', '%' . $name . '%');
+    }
+
+    // Filter by amount range
+    if($request->has('amount_min') && $request->has('amount_max')){
+        $amountMin = $request->amount_min;
+        $amountMax = $request->amount_max;
+        $query->whereBetween('total_amount', [$amountMin, $amountMax]);
+    }
+
+    // Filter by invoice ID
+    if($request->has('invoice_id')){
+        $query->where('id', $request->invoice_id);
+    }
+
+    // Order by id in descending order
+    $query->orderBy('id', 'DESC');
+
+    // Get the filtered invoices
+    $query->where('is_completed', 1);
+    $invoices = $query->get(['id', 'name', 'total_amount', 'invoice_date', 'type']);
+
+    // Calculate total amount and total transactions
+    $totalAmount = round($invoices->sum('total_amount'),2);
+    $totalTransactions = $invoices->count();
+
+    return response([
+        'status' => true,
+        'total_amount' => $totalAmount,
+        'total_transactions' => $totalTransactions,
+        'url' => "Red PDF Icon",
+        'data' => $invoices,
+        'message' => "Data fetched."
+    ], 200);
+}
+public function getExistedUser(Request $request)
+{
+    // Validate the request to ensure either 'name' or 'mobile_number' is provided
+    $request->validate([
+        'mobile_number' => 'required',
+    ]);
+    $mobileNumber = $request->input('mobile_number');
+
+    // Query to find the user based on name or mobile number
+    $query = Invoice::query();
+
+    if ($mobileNumber) {
+        $query->where('mobile_number', 'like', '%' . $mobileNumber . '%');
+    }
+
+    // Retrieve the first matching invoice
+    $invoice = $query->first();
+
+    // If no invoice found, return an error response
+    if (!$invoice) {
+        return response([
+            'status' => false,
+            'message' => 'No user found with the provided name or mobile number.'
+        ], 404);
+    }
+
+    // Get billing and shipping addresses
+    $billingAddress = Addres::where('invoice_id', $invoice->id)->where('type', 'billing')->first();
+    $shippingAddress = Addres::where('invoice_id', $invoice->id)->where('type', 'shipping')->first();
+
+    // Prepare response data
+    $data = [
+        'name' => $invoice->name,
+        'mobile_number' => $invoice->mobile_number,
+        'customer_type' => $invoice->customer_type,
+        'doc_no' => $invoice->doc_no,
+        'billing_id' => $invoice->billing_address_id,
+        'shipping_id' => $invoice->shipping_address_id,
+        'billing_address' => $billingAddress ? $billingAddress->only(['address_1', 'address_2', 'city', 'state', 'pincode']) : null,
+        'shipping_address' => $shippingAddress ? $shippingAddress->only(['address_1', 'address_2', 'city', 'state', 'pincode']) : null,
+    ];
+
+    return response([
+        'status' => true,
+        'data' => $data,
+        'message' => 'User data fetched successfully.'
+    ], 200);
+}
+public function dashboardReport(Request $request)
+{
+    // Get Sale Report
+    $saleQuery = Invoice::query();
+    $saleQuery->where('is_completed', 1);
+    $saleQuery->orderBy('id', 'DESC');
+    $sales = $saleQuery->get(['id', 'name', 'total_amount', 'invoice_date', 'type']);
+    $actualSaleAmount = round($sales->sum('total_amount'), 2);
+
+    // Get Purchase Sale Invoice Report
+    $purchaseSaleQuery = Invoice::query();
+    $purchaseSaleQuery->where('is_completed', 1)->where('type', 'normal');
+    
+    $purchaseSales = $purchaseSaleQuery->get(['id', 'total_dgst', 'total_cgst', 'total_igst', 'total_amount']);
+    $totalGst = round($purchaseSales->sum(function($invoice) {
+        return $invoice->total_dgst + $invoice->total_cgst + $invoice->total_igst;
+    }), 2);
+    $totalExcludingGst = round($purchaseSales->sum('total_amount') - $totalGst, 2);
+
+    // Get Invoice Report (Item Purchases)
+    // Get Invoice Report (Item Purchases)
+// Build the query to join items with completed and normal type invoices
+$itemQuery = Item::query()
+    ->join('invoices', 'items.invoice_id', '=', 'invoices.id')
+    ->where('invoices.is_completed', 1)
+    ->where('invoices.type', 'normal');
+
+// Debug the query
+$sqlQuery = $itemQuery->toSql();
+$params = $itemQuery->getBindings();
+
+
+// Fetch the items' quantities
+$items = $itemQuery->get(['items.quantity']);
+
+// Debug the fetched items
+
+
+// Calculate the total quantity of items purchased
+$totalItemsPurchased = $items->sum('quantity');
+
+
+
+
+    $query = Expenses::query();
+    $expenses = $query->get();
+    // Calculate total amount and total transactions
+    $totalAmount = round($expenses->sum('amount'),2);
+
+    // Prepare response data
+    $data = [
+        'actual_sale_amount' => $actualSaleAmount,
+        'total_excluding_gst' => $totalExcludingGst,
+        'total_expense' => $totalAmount,
+        'total_gst' => $totalGst,
+        'total_items_purchased' => $totalItemsPurchased,
+        'profit_loss' => null
+    ];
+
+    return response([
+        'status' => true,
+        'data' => $data,
+        'message' => 'Dashboard data fetched successfully.'
+    ], 200);
+}
+
+
 
  
 

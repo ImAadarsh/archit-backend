@@ -52,5 +52,18 @@ Route::get("/getItemsByInvoiceId",'App\Http\Controllers\Admin@getItemsByInvoiceI
 Route::get("/getAddressByInvoiceId",'App\Http\Controllers\Admin@getAddressByInvoiceId');
 Route::get("/getAllInvoices",'App\Http\Controllers\Admin@getAllInvoices');
 Route::get("/getDetailedInvoice/{invoiceId}",'App\Http\Controllers\Admin@getDetailedInvoice');
+Route::get("/getExistedUser",'App\Http\Controllers\Admin@getExistedUser');
+Route::get("/dashboardReport",'App\Http\Controllers\Admin@dashboardReport');
 
 
+
+
+
+// AFter Report Module
+Route::get("/getSaleReport",'App\Http\Controllers\Admin@getSaleReport');
+Route::get("/getExpenseReport",'App\Http\Controllers\Admin@getExpenseReport');
+Route::get("/getPurchaseSaleInvoice",'App\Http\Controllers\Admin@getPurchaseSaleInvoice');
+Route::get("/getInvoiceListReport",'App\Http\Controllers\Admin@getInvoiceListReport');
+
+
+Route::get("/getSaleReport",'App\Http\Controllers\Admin@getSaleReport');
